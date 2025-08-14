@@ -369,7 +369,7 @@ async def on_pick_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """ثبت کلیک دکمهٔ حضور زیر پست کانال + آپدیت شمارنده."""
+    """ثبت کلیک دکمهٔ حضور زیر پست کانال + جلوگیری از دوباره‌زنی + آپدیت شمارنده."""
     if not update.callback_query:
         return
     q = update.callback_query
@@ -380,12 +380,28 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with Session() as session:
         post = await get_or_create_post(session, q.message.message_id)
         user = await get_or_create_user(session, q.from_user)
-        # Insert unique attendance
-        try:
-            session.add(Attendance(post_id=post.id, user_id=user.id))
-            await session.commit()
-        except Exception:
-            await session.rollback()
+
+        # آیا قبلاً برای این پست حاضر زده؟
+        already = (await session.execute(
+            select(func.count(Attendance.id)).where(
+                Attendance.post_id == post.id,
+                Attendance.user_id == user.id
+            )
+        )).scalar_one() > 0
+
+        if already:
+            # شمارنده فعلی را بخوان (تغییری ندارد)
+            n = await attendance_count(session, post.id)
+            try:
+                await q.message.edit_reply_markup(reply_markup=kb(n))
+            except Exception:
+                pass
+            return await q.answer("یه بار حاضری زدی 👀", show_alert=True)
+
+        # اولین بار است: ثبت حضور
+        session.add(Attendance(post_id=post.id, user_id=user.id))
+        await session.commit()
+
         n = await attendance_count(session, post.id)
 
     try:
@@ -393,6 +409,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
     await q.answer("ثبت شد ✅", show_alert=False)
+
 
 async def cmd_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """خروجی CSV از آخرین پست یا یک message_id مشخص (ادمین داخلی)."""
