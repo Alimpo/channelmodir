@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    container_name: attendance_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgresx
+      POSTGRES_DB: attendance
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  bot:
+    build: .
+    container_name: attendance_bot
+    restart: always
+    depends_on:
+      - db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgresx
+      POSTGRES_DB: attendance
+      BOT_TOKEN: "7611464078:AAHVcmNs8-YCliMbRZUv2JclpWRzdUO9tnA"
+      CHANNEL_ID: "@username_کانال"
+      DATABASE_URL: "postgresql+asyncpg://postgres:postgresx@db:5432/attendance"
+      ADMIN_IDS: "390805306"
+    volumes:
+      - .:/app
+
+volumes:
+  db_data:
